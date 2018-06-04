@@ -19,7 +19,7 @@
 function q_marks($array, $pre = '', $post = '') {
 	$qs = array ();
 	flatten_ ( $array );
-	while ( each ( $array ) ) {
+	foreach ( $array as $x ) {
 		$qs [] = "$pre?$post";
 	}
 	return implode ( ", ", $qs );
@@ -71,9 +71,60 @@ function array_collapse($array) {
 	}
 	return $collapsed;
 }
+/**
+ * For an array that contains sub-arrays, move those sub arrays into the top level arrays, retaining their keys.
+ * This means that top level key-value pairs will be overwritten by sub-level key value pairs if they have the same key name.
+ * This function acts by reference on the original array.
+ *
+ * @param array $array
+ */
 function array_collapse_(&$array) {
 	$array = array_collapse ( $array );
 	return $array;
+}
+/**
+ * For an array that contains sub-arrays, append those sub arrays onto the top level arrays.
+ * Sub-level element keys are not retained, this means that top level key-value pairs will not be overwritten by sub-level key value pairs.
+ *
+ * @param array $array
+ */
+function array_collapse_cat($array) {
+	$collapsed = array ();
+	foreach ( $array as $key => $val ) {
+		if (is_array ( $val ))
+			foreach ( $val as $vkey => $vval )
+				$collapsed [] = $vval;
+		else
+			$collapsed [] = $val;
+	}
+	return $collapsed;
+}
+function array_collapse_cat_(&$array) {
+	$array = array_collapse_cat ( $array );
+	return $array;
+}
+/**
+ * Returns the arguments as a single array
+ *
+ * @param mixed ...$arrays
+ * @return array
+ */
+function array_cat(...$arrays) {
+	return $arrays;
+}
+/**
+ * For all the arguments (arrays), concatenate their elements into a single array.
+ * Keys will be lost.
+ *
+ * @param array[] ...$arrays
+ * @return array
+ */
+function array_cat_sub(...$arrays) {
+	$a = [ ];
+	foreach ( $arrays as $array )
+		foreach ( $array as $val )
+			$a [] = $val;
+	return $a;
 }
 /**
  * If the arg is an array then it is returned unchanged,
@@ -101,6 +152,7 @@ function to_array_(&$v) {
 /**
  * Returns the first value of the given array, and also replaces (by reference) the array variable's value with the result.
  * If the arg is not an array then the variable is returned unchanged.
+ * Returns FALSE if array is empty.
  *
  * @param array $a
  * @return mixed
@@ -111,6 +163,7 @@ function first_(&$a) {
 /**
  * Returns the first value of the given array.
  * If the arg is not an array then the arg is returned unchanged.
+ * Returns FALSE if array is empty.
  *
  * @param array $a
  * @return mixed
@@ -120,27 +173,61 @@ function first($a) {
 	return is_array ( $a ) ? reset ( $a ) : $a;
 }
 /**
+ * Returns the last value of the given array, and also replaces (by reference) the array variable's value with the result.
+ * If the arg is not an array then the variable is returned unchanged.
+ * Returns FALSE if array is empty.
+ *
+ * @param array $a
+ * @return mixed
+ *
+ */
+function last_(&$a) {
+	return $a = last ( $a );
+}
+/**
+ * Returns the last value of the given array.
+ * If the arg is not an array then the arg is returned unchanged.
+ * Returns FALSE if array is empty.
+ *
+ * @param array $a
+ * @return mixed
+ *
+ */
+function last($a) {
+	return is_array ( $a ) ? end ( $a ) : $a;
+}
+/**
+ * Returns the key of the last element in an array
+ *
+ * @param array $a
+ */
+function last_key($a) {
+	end ( $a );
+	return key ( $a );
+}
+/**
+ *
+ * Any number of args (variadic) can be provided and will be flattened into a single-dimensional array.
  * Flattens a nested array into one flat array.
  * Keys will be lost or modified to numeric index keys but order is retained.
  * If a single scalar value is passed in instead of an array then it will be returned as a value in a single-element array.
  * If arg is null then returns an empty array.
  *
- * @param array $array
+ * @param array|mixed|mixed[] ...$a
  * @return array
  */
-function flatten($array) {
+function flatten(...$a) {
 	$flat = [ ];
-	if (is_null ( $array ))
-		;
-	else if (is_array ( $array ))
-		foreach ( $array as $val ) {
-			if (is_array ( $val )) {
-				$flat = array_merge ( $flat, flatten ( $val ) );
-			} else
-				$flat [] = $val;
-		}
-	else
-		$flat = to_array ( $array );
+	foreach ( $a as $array )
+		if (is_array ( $array ))
+			foreach ( $array as $val ) {
+				if (is_array ( $val )) {
+					$flat = array_merge ( $flat, flatten ( $val ) );
+				} else
+					$flat [] = $val;
+			}
+		else
+			$flat [] = $array;
 	return $flat;
 }
 /**
@@ -164,7 +251,7 @@ function flatten_(&$array) {
  * @param array $array
  * @return string
  */
-function flatten_to_string($delim, $array) {
+function flatten_to_string($delim, ...$array) {
 	return implode ( $delim, flatten ( $array ) );
 }
 /**
@@ -188,6 +275,132 @@ function flatten_to_text_list($array, $delim = ', ', $last_delim = ' and ') {
 		$text = implode ( $delim, $array ) . $last_delim . $text;
 	return $text ? $text : '';
 }
+/**
+ * Join strings together with a delimiter, e.g.
+ * "/", but first removing any leading or trailing delimiter characters.
+ * If no delimiter specified, then trims whitespace (as per trim()).
+ * The start of the first string will not have the delimiter removed or added (so absolute/relative paths remain so).
+ * The end of the last string will not have the delimiter removed or added.
+ * Blank elements are removed.
+ *
+ * @param string $delim
+ * @param array ...$array
+ * @return string
+ */
+function implode_neatly($delim = '', ...$array) {
+	flatten_ ( $array );
+	$first = rtrim ( array_shift ( $array ), $delim );
+	$last = ltrim ( array_pop ( $array ), $delim );
+	if ($delim)
+		foreach ( $array as &$el ) {
+			$el = trim ( $el, $delim );
+		}
+	$array = remove_blanks ( flatten ( $first, $array, $last ) );
+	return implode ( $delim, $array );
+}
+/**
+ * Given a tree array structure, such as a directory structure as a tree,
+ * return an array of strings which recursively joins each child value with its parent key value,
+ * so you end up with one long string element for each final child.
+ * If the final child value is null then that branch is ignored.
+ * This allows you to have conditional branches and children, return null if you want that branch ignored, or else return the value (or further branches). 
+ *
+ * Example "tree" array:
+ * <!--
+ *
+ * @formatter:off
+ * -->
+ * <pre>
+ *$css = [
+ *    base_url () => [
+ *        'assets' => [
+ *            'admin' => [
+ *                '/pages/css' => [
+ *                    'css.css'
+ *                ],
+ *                'layout/css' => [
+ *                    'layout.css',
+ *                    'themes/default.css',
+ *                    'custom.css'
+ *                ]
+ *
+ *            ],
+ *            'global' => [
+ *                'plugins' => [
+ *                    'font-awesome/css/font-awesome.min.css',
+ *                    'simple-line-icons/simple-line-icons.min.css',
+ *                    'bootstrap/css/bootstrap.min.css',
+ *                    'uniform/css/uniform.default.css',
+ *                    $page === "frontpage" ? 'front_page.css' : NULL,  // Example conditional child
+ *                    'select2/select2.css'
+ *                ],
+ *                'css' => [
+ *                    'components.css',
+ *                    'plugins.css'
+ *                ]
+ *            ],
+ *            'application' => [
+ *                'css' => [
+ *                    'login.css'
+ *                ]
+ *            ]
+ *        ]
+ *    ]
+ *];
+ * </pre>
+ * <!--
+ * @formatter:on
+ * -->
+ * Then this PHP code<br/> *
+ * <code>
+ * print_r(explode_tree("/", $css));
+ * </code><br/>
+ *
+ * will give you an array like:
+ * <!--
+ * @formatter:off
+ * -->
+ * <pre>
+ *   Array
+ *   (
+ *		   [0] => assets/admin/pages/css/css.css
+ *		   [1] => assets/admin/layout/css/layout.css
+ *		   [2] => assets/admin/layout/css/themes/default.css
+ *		   [3] => assets/admin/layout/css/custom.css
+ *		   [4] => assets/global/plugins/font-awesome/css/font-awesome.min.css
+ *		   [5] => assets/global/plugins/simple-line-icons/simple-line-icons.min.css
+ *		   [6] => assets/global/plugins/bootstrap/css/bootstrap.min.css
+ *		   [7] => assets/global/plugins/uniform/css/uniform.default.css
+ *		   [8] => assets/global/plugins/select2/select2.css
+ *		   [9] => assets/global/css/components.css
+ *		   [10] => assets/global/css/plugins.css
+ *		   [11] => assets/application/css/login.css
+ *   	)
+ * </pre>
+ * <!--
+ * @formatter:on
+ * -->
+ *
+ * @param array $tree
+ * @param string $parent
+ * @param string $delim
+ * @param array $strings
+ * @return string
+ */
+function explode_tree($delim = '', $tree, $parent = '', &$strings = []) {
+	foreach ( $tree as $key => $branch ) {
+		if (is_array ( $branch )) {
+			if ($parent)
+				$thisparent = implode_neatly ( $delim, $parent, $key );
+			else // first (root) element
+				$thisparent = $key;
+			explode_tree ( $delim, $branch, $thisparent, $strings );
+		} elseif (! is_null ( $branch ))
+			$strings [] = implode_neatly ( $delim, $parent, $branch );
+	}
+	return $strings;
+}
+
 /**
  * Sort a 2-dimensional array by one of the 2nd level keys (equivalent to columns).
  *
@@ -327,10 +540,7 @@ function remove_blanks($array, $include_whitespace = false) {
  * @return array
  */
 function remove_blanks_(&$array, $include_whitespace = false) {
-	if (! is_array ( $array ))
-		$array = array (
-				$array 
-		);
+	to_array_ ( $array );
 	foreach ( $array as $key => $val ) {
 		if (is_null ( $val ) || $val === '' || ($include_whitespace && ctype_space ( $val )))
 			unset ( $array [$key] );
@@ -469,12 +679,59 @@ function array_subset($array, ...$keys) {
  * The keys in the resulting array will match the keys in the original array.
  *
  * @param array $array
- * @param array ...$keys
+ * @param array|string|int ...$keys
  * @return array
  */
 function array_subset_(&$array, ...$keys) {
-	$array = array_subset ( $array, $keys );
+	return $array = array_subset ( $array, $keys );
+}
+/**
+ * Given an array of 2 or more dimensions and a set of keys (as an array, or single string)
+ * performs array_subset() on each of the sub-arrays, returning the original array with the sub-arrays only containing the elements matching the given keys.
+ * Similar to array_column() except retaining the array structure.
+ *
+ * @param array $array
+ * @param array|string|int ...$keys
+ */
+function array_subsubset($array, ...$keys) {
+	foreach ( $array as &$el )
+		array_subset_ ( $el, $keys );
 	return $array;
+}
+/**
+ * Given an array (by reference) of 2 or more dimensions and a set of keys (as an array, or single string)
+ * performs array_subset() on each of the sub-arrays, modifying the original array so that the sub-arrays only contain the elements matching the given keys.
+ * Similar to array_column() except retaining the array structure.
+ *
+ * @param array $array
+ * @param array|string|int ...$keys
+ */
+function array_subsubset_(&$array, ...$keys) {
+	return $array = array_subsubset ( $array, $keys );
+}
+
+/**
+ * Given an array of 2 or more dimensions and a key
+ * Like array_subsubset() but for only 1 level 2 key, and collapses the sub-array.
+ *
+ * @param array $array
+ * @param array|string|int ...$keys
+ */
+function array_subsubcollapse($array, $key) {
+	foreach ( $array as &$el )
+		$el = getval_def ( $el, [ ], $key );
+	return $array;
+}
+/**
+ * Given an array of 2 or more dimensions and a key
+ * Like array_subsubset() but for only 1 level 2 key, and collapses the sub-array.
+ *
+ * @param array $array
+ * @param array|string|int ...$keys
+ *
+ */
+function array_subsubcollapse_(&$array, $key) {
+	return $array = array_subsubcollapse ( $array, $key );
 }
 /**
  * Given an array and a set of keys (as an array, or just multiple string parameters)
@@ -496,7 +753,7 @@ function array_unset($array, ...$keys) {
  * @return array
  */
 function array_unset_(&$array, ...$keys) {
-	return is_array ( $array ) ? array_diff_key ( $array, array_flip ( flatten ( $keys ) ) ) : $array;
+	return $array = is_array ( $array ) ? array_diff_key ( $array, array_flip ( flatten ( $keys ) ) ) : $array;
 }
 /**
  * Given an array and a set of patterns (as an array, or just multiple string parameters)
@@ -612,6 +869,17 @@ function array_where($array, $params, $equals = TRUE) {
 	}
 	return $results;
 }
+/**
+ * Given a 2 dimensional array, return all elements which have key-value pairs that do NOT match all those in the provided set.
+ * Like a database 'delete from ... where ...',
+ * or 'select ... where ... != ... ' does with a table.
+ * Keys of the resulting array are retained from the original.
+ *
+ * @param array $array
+ * @param array $params
+ *        	key => value pairs.
+ * @return array
+ */
 function array_where_not($array, $params) {
 	return array_where ( $array, $params, FALSE );
 }
@@ -893,13 +1161,11 @@ function hasval($var, $key = NULL) {
  * Also see getval_def() which does the same thing but allows a definable default value to be returned.
  *
  * @param mixed $var
- * @param string|array $key
+ * @param string|array $keys
  * @return mixed|NULL
  */
-function getval($var, $varkeys) {
-	$varkeys = func_get_args ();
-	array_shift ( $varkeys ); // shift off the $var
-	return getval_def ( $var, NULL, $varkeys );
+function getval($var, ...$keys) {
+	return getval_def ( $var, NULL, ...$keys );
 }
 /**
  * Given an array, a default return value, and a set of keys (as a 3rd argument, or as any number of additional arguments),
@@ -920,10 +1186,7 @@ function getval($var, $varkeys) {
  * @param string|array $varkeys
  * @return mixed|NULL
  */
-function getval_def($var, $default = NULL, $varkeys) {
-	$keys = func_get_args ();
-	array_shift ( $keys ); // shift off the $var
-	array_shift ( $keys ); // shift off the $default
+function getval_def($var, $default = NULL, ...$keys) {
 	flatten_ ( $keys );
 	$key = array_shift ( $keys ); // get the next key
 	if (! array_key_exists ( $key, $var )) {
@@ -933,6 +1196,25 @@ function getval_def($var, $default = NULL, $varkeys) {
 	else
 		return $var [$key];
 }
+if (! function_exists ( "element" )) {
+	/*
+	 * Create the element() function if it does not exist (e.g. if this library is being used outside CodeIgniter)
+	 */
+	/**
+	 * element()
+	 *
+	 * Lets you determine whether an array index is set and whether it has a value.
+	 * If the element is empty it returns NULL (or whatever you specify as the default value.)
+	 *
+	 * @param string $item
+	 * @param array $array
+	 * @param mixed $default
+	 * @return mixed depends on what the array contains
+	 */
+	function element($item, array $array, $default = NULL) {
+		return array_key_exists ( $item, $array ) ? $array [$item] : $default;
+	}
+}
 /**
  * Same as getval_def() except returns the default if an element is empty.
  *
@@ -941,10 +1223,7 @@ function getval_def($var, $default = NULL, $varkeys) {
  * @param string|array $varkeys
  * @return mixed|NULL
  */
-function getval_edef($var, $default = NULL, $varkeys) {
-	$keys = func_get_args ();
-	array_shift ( $keys ); // shift off the $var
-	array_shift ( $keys ); // shift off the $default
+function getval_edef($var, $default = NULL, ...$keys) {
 	flatten_ ( $keys );
 	$key = array_shift ( $keys ); // get the next key
 	if (! array_key_exists ( $key, $var ) || empty ( $var [$key] )) {
@@ -961,10 +1240,8 @@ function getval_edef($var, $default = NULL, $varkeys) {
  * @param string|array $key
  * @return mixed|NULL
  */
-function getval_e($var, $varkeys) {
-	$varkeys = func_get_args ();
-	array_shift ( $varkeys ); // shift off the $var
-	return getval_edef ( $var, NULL, $varkeys );
+function getval_e($var, ...$keys) {
+	return getval_edef ( $var, NULL, $keys );
 }
 /**
  * Returns true if all values in the array are integers (ctype_digit()).
@@ -979,7 +1256,7 @@ function array_ctype_digit($array, $recursive = FALSE) {
 	return ! in_array ( FALSE, array_map ( 'ctype_digit', $array ) );
 }
 /**
- * Returns true if all values in the array are integers or strings with an integer value (is_int or ctype_digit).
+ * Returns true if all values in the 1st argument array are integers or strings with an integer value (is_int or ctype_digit).
  * If 2nd param is true then check all values recursively.
  *
  * @param array $array
@@ -989,13 +1266,44 @@ function array_ctype_digit($array, $recursive = FALSE) {
 function array_is_int_vals($array, $recursive = FALSE) {
 	if (! is_array ( $array ))
 		return FALSE;
-	$recursive ? flatten_ ( $array ) : null;
-	foreach ( $array as $el ) {
-		if (! ctype_digit ( $el ) && ! is_int ( $el )) {
+	if ($recursive)
+		flatten_ ( $array );
+	return is_int_vals ( $array );
+}
+/**
+ * Returns true if<ul>
+ * <li>the argument is an integer or string with integer value (is_int or ctype_digit).
+ * <li>or the argument is an array and all values in the array are integers or strings with an integer value.
+ * </ul>
+ *
+ * @param int|string|array $val
+ * @return boolean
+ */
+function is_int_vals($val) {
+	to_array_ ( $val );
+	foreach ( $val as $el ) {
+		if (! ctype_digit ( "$el" )) {
 			return FALSE;
 		}
 	}
 	return TRUE;
+}
+/**
+ * Given an array, returns an array of the integer (or ctype_digit) values.
+ * If the arg is not an array then it will be converted to a single element of an array.
+ *
+ * @param array $array
+ * @return integer[]
+ */
+function array_int_vals($array) {
+	to_array_ ( $array );
+	$ret = [ ];
+	foreach ( $array as $key => $el ) {
+		if (ctype_digit ( "$el" )) {
+			$ret [$key] = $el;
+		}
+	}
+	return $ret;
 }
 /**
  * For an array of arrays, use the value of the supplied key as the key for the array.
@@ -1020,10 +1328,9 @@ function indexBy_(&$array, $key, $ksort = TRUE) {
 function indexBy($array, $key, $ksort = TRUE) {
 	if (! $key)
 		return $array;
-	$newArray = array ();
-	foreach ( $array as $value ) {
+	$newArray = [ ];
+	foreach ( $array as $value )
 		$newArray [$value [$key]] = $value;
-	}
 	if ($ksort)
 		ksort ( $newArray );
 	return $newArray;
@@ -1062,6 +1369,57 @@ function groupBy($array, $key, $ksort = TRUE) {
 	if ($ksort)
 		ksort ( $newArray );
 	return $newArray;
+}
+/**
+ * Similar to postgreSQL's array_agg()
+ * Does the same thing as indexBy(), where the array is indexed by arg2 ($groupBy),
+ * rows with the same key are lost, retaining only the values of the last row,
+ * except that the array fields (columns) listed in arg3 ($aggregateCols) are aggregated into arrays.
+ * Returns the array with the new keys being the '$groupBy' value.
+ *
+ * @param array $array
+ * @param string $groupBy
+ * @param array|string $aggregateCols
+ * @param boolean $ksort
+ * @return array[]
+ */
+function array_agg($array, $groupBy, $aggregateCols, $ksort = TRUE) {
+	if (! $groupBy || ! $aggregateCols || ! $array)
+		return $array;
+	$newArray = [ ];
+	to_array_ ( $aggregateCols );
+	groupBy_ ( $array, $groupBy );
+	foreach ( $array as $groupKey => $group ) {
+		$newArray [$groupKey] = [ ];
+		foreach ( $group as $groupRowKey => $groupRow ) {
+			foreach ( $groupRow as $groupCol => $groupColVal ) {
+				if (in_array ( $groupCol, $aggregateCols ))
+					$newArray [$groupKey] [$groupCol] [] = $groupColVal;
+				else
+					$newArray [$groupKey] [$groupCol] = $groupColVal;
+			}
+		}
+	}
+	if ($ksort)
+		ksort ( $newArray );
+	return $newArray;
+}
+/**
+ * Similar to postgreSQL's array_agg()
+ * Does the same thing as indexBy_(), where the array is indexed by arg2 ($groupBy),
+ * rows with the same key are lost, retaining only the values of the last row,
+ * except that the array fields (columns) listed in arg3 ($aggregateCols) are aggregated into arrays.
+ * Modifies the supplied array, by reference, with the new keys.
+ * Returns the array with the new keys being the '$groupBy' value.
+ *
+ * @param array $array
+ * @param string $groupBy
+ * @param array|string $aggregateCols
+ * @param boolean $ksort
+ * @return array[]
+ */
+function array_agg_(&$array, $groupBy, $aggregateCols, $ksort = TRUE) {
+	return $array = array_agg ( $array, $groupBy, $aggregateCols, $ksort = TRUE );
 }
 /**
  * Sourced from: http://nz2.php.net/manual/en/function.array-multisort.php#100534
