@@ -129,25 +129,35 @@ function array_cat_sub(...$arrays) {
 /**
  * If the arg is an array then it is returned unchanged,
  * if the arg is not an array then an array is returned with the arg's value as the first element in an array.
+ * Note: If the arg is null then the array will have one element with the value null.
+ * If arg2 is true and arg1 is null then an empty array will be returned.
  *
  * @param mixed $v
  * @return array
  */
-function to_array($v) {
-	return is_array ( $v ) ? $v : array (
-			$v 
-	);
+function to_array($v, $ignorenull = false) {
+	if (! is_array ( $v )) {
+		if (is_null ( $v ) && $ignorenull)
+			$v = [ ];
+		else
+			$v = [ 
+					$v 
+			];
+	}
+	return $v;
 }
 /**
  * If the arg is an array then it is returned unchanged,
  * if the arg is not an array then it is changed into one, by reference, with the arg's value as the first element in an array.
+ * Note: If the arg is null then the array will have one element with the value null.
+ * If arg2 is true and arg1 is null then it will be set to an empty array.
  *
  * @param mixed $v
  * @return array
  *
  */
-function to_array_(&$v) {
-	return $v = to_array ( $v );
+function to_array_(&$v, $notnull = false) {
+	return $v = to_array ( $v, $notnull );
 }
 /**
  * Returns the first value of the given array, and also replaces (by reference) the array variable's value with the result.
@@ -303,7 +313,7 @@ function implode_neatly($delim = '', ...$array) {
  * return an array of strings which recursively joins each child value with its parent key value,
  * so you end up with one long string element for each final child.
  * If the final child value is null then that branch is ignored.
- * This allows you to have conditional branches and children, return null if you want that branch ignored, or else return the value (or further branches). 
+ * This allows you to have conditional branches and children, return null if you want that branch ignored, or else return the value (or further branches).
  *
  * Example "tree" array:
  * <!--
@@ -842,6 +852,8 @@ function array_contains_subset($array, $params) {
 }
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that match all those in the provided set.
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'select ... where ...' does with a table.
  * Keys of the resulting array are retained from the original.
  *
@@ -857,7 +869,7 @@ function array_where($array, $params, $equals = TRUE) {
 	foreach ( $array as $arrayKey => $el ) {
 		$match = TRUE;
 		foreach ( $params as $key => $val ) {
-			if (! array_key_exists ( $key, $el ) || $el [$key] != $val) {
+			if ((! is_array ( $el ) || ! array_key_exists ( $key, $el ) || $el [$key] != $val) && (! is_object ( $el ) || ! property_exists ( $el, $key ) || $el->$key != $val)) {
 				$match = FALSE;
 				break;
 			}
@@ -871,6 +883,8 @@ function array_where($array, $params, $equals = TRUE) {
 }
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that do NOT match all those in the provided set.
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'delete from ... where ...',
  * or 'select ... where ... != ... ' does with a table.
  * Keys of the resulting array are retained from the original.
@@ -885,6 +899,8 @@ function array_where_not($array, $params) {
 }
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that match at least one of those in the provided set.
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'select ... where ... or ...' does with a table.
  * Keys of the resulting array are retained from the original.
  *
@@ -900,7 +916,7 @@ function array_where_or($array, $params, $equals = TRUE) {
 	foreach ( $array as $arrayKey => $el ) {
 		$match = FALSE;
 		foreach ( $params as $key => $val ) {
-			if (array_key_exists ( $key, $el ) || $el [$key] != $val) {
+			if ((is_array ( $el ) && array_key_exists ( $key, $el ) && $el [$key] != $val) || (is_object ( $el ) && property_exists ( $el, $key ) && $el->$key != $val)) {
 				$match = TRUE;
 				break;
 			}
@@ -914,6 +930,8 @@ function array_where_or($array, $params, $equals = TRUE) {
 }
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that do not match any of those in the provided set.
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'select ... where ... != ... and ... != ...' does with a table.
  * Keys of the resulting array are retained from the original.
  *
@@ -928,6 +946,8 @@ function array_where_not_all($array, $params) {
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that have boolean (truthy or falsy)
  * values which match all those in the provided set.
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'select ... where ...' does with a table.
  * Keys of the resulting array are retained from the original.
  *
@@ -943,7 +963,7 @@ function array_where_boolval($array, $params, $equals = TRUE) {
 	foreach ( $array as $arrayKey => $el ) {
 		$match = TRUE;
 		foreach ( $params as $key => $val ) {
-			if (! array_key_exists ( $key, $el ) || ! ! $el [$key] != ! ! $val) {
+			if ((! is_array ( $el ) || ! array_key_exists ( $key, $el ) || ! ! $el [$key] != ! ! $val) && (! is_object ( $el ) || ! property_exists ( $el, $key ) || ! ! $el->$key != ! ! $val)) {
 				$match = FALSE;
 				break;
 			}
@@ -963,6 +983,8 @@ function array_where_boolval_not($array, $params) {
  * Given a 2 dimensional array, return all elements which have key-value pairs that match all those in the provided set,
  * or if the search parameter set contains an array then return the elements from the original array where the value is IN the search parameter array.
  *
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'select ... where ... in ... and ... in ...' does with a table.
  * Keys of the resulting array are retained from the original.
  *
@@ -979,7 +1001,7 @@ function array_where_in($array, $params, $equals = TRUE) {
 		$match = TRUE;
 		foreach ( $params as $key => $val ) {
 			flatten_ ( $val );
-			if (! in_array ( $el [$key], $val )) {
+			if ((! is_object ( $el ) || ! in_array ( $el->$key, $val )) && (! is_array ( $el ) || ! in_array ( $el [$key], $val ))) {
 				$match = FALSE;
 				break;
 			}
@@ -995,6 +1017,8 @@ function array_where_in($array, $params, $equals = TRUE) {
  * Given a 2 dimensional array, return all elements which have key-value pairs that match none of those in the provided set,
  * or if the search parameter set contains an array then return the elements from the original array where the value is NOT IN the search parameter array.
  *
+ * If the array elements are objects then it checks the property names and values.
+ *
  * Like a database 'select ... where ... not in ... and ... not in ...' does with a table.
  * Keys of the resulting array are retained from the original.
  *
@@ -1009,6 +1033,8 @@ function array_where_not_in($array, $params) {
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that match at least 1 of those in the provided set,
  * or if the search parameter set contains an array then return the elements from the original array where the value is IN the search parameter array.
+ *
+ * If the array elements are objects then it checks the property names and values.
  *
  * Like a database 'select ... where ... in ... or ... in ...' does with a table.
  * Keys of the resulting array are retained from the original.
@@ -1026,7 +1052,7 @@ function array_where_in_or($array, $params, $equals = TRUE) {
 		$match = FALSE;
 		foreach ( $params as $key => $val ) {
 			flatten_ ( $val );
-			if (in_array ( $el [$key], $val )) {
+			if ((is_object ( $el ) && in_array ( $el->$key, $val )) || (is_array ( $el ) && in_array ( $el [$key], $val ))) {
 				$match = TRUE;
 				break;
 			}
@@ -1041,6 +1067,8 @@ function array_where_in_or($array, $params, $equals = TRUE) {
 /**
  * Given a 2 dimensional array, return all elements which have key-value pairs that do not match at least 1 of those in the provided set,
  * or if the search parameter set contains an array then return the elements from the original array where the value is NOT IN the search parameter array.
+ *
+ * If the array elements are objects then it checks the property names and values.
  *
  * Like a database 'select ... where ... not in ... or ... not in ...' does with a table.
  * Keys of the resulting array are retained from the original.
